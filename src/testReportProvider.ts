@@ -7,9 +7,10 @@ import { Disposable, ExtensionContext, Range, Uri, ViewColumn, WebviewPanel, win
 import { openTextDocument } from './commands/explorerCommands';
 import { JavaTestRunnerCommands } from './constants/commands';
 import { logger } from './logger/logger';
-import { ITestItemBase } from './protocols';
+import { ITestItem } from './protocols';
+import { ITestResult } from './runners/models';
 import { ITestResultDetails, TestStatus } from './runners/models';
-import { testResultManager } from './testResultManager';
+import { searchTestLocation } from './utils/commandUtils';
 import { getReportPosition } from './utils/settingUtils';
 
 class TestReportProvider implements Disposable {
@@ -25,7 +26,7 @@ class TestReportProvider implements Disposable {
         this.resourceBasePath = path.join(this.context.extensionPath, 'resources', 'templates');
     }
 
-    public async report(tests: ITestItemBase[]): Promise<void> {
+    public async report(tests: ITestResult[]): Promise<void> {
         const position: ViewColumn = getReportPosition();
         if (!this.panel) {
             this.panel = window.createWebviewPanel('testRunnerReport', 'Java Test Report', position, {
@@ -44,17 +45,22 @@ class TestReportProvider implements Disposable {
 
         this.panel.webview.html = await testReportProvider.provideHtmlContent(tests);
 
-        this.panel.webview.onDidReceiveMessage((message: any) => {
+        this.panel.webview.onDidReceiveMessage(async (message: any) => {
             if (!message) {
                 return;
             }
             switch (message.command) {
                 case JavaTestRunnerCommands.OPEN_DOCUMENT:
-                    if (!message.uri) {
-                        logger.error('Could not open the document, the Uri in the message is null.');
-                        return;
+                    if (message.uri) {
+                        return openTextDocument(Uri.parse(message.uri), JSON.parse(message.range) as Range);
+                    } else if (message.fullName) {
+                        const items: ITestItem[] = await searchTestLocation(message.fullName);
+                        if (items.length) {
+                            return openTextDocument(Uri.parse(items[0].uri), items[0].range);
+                        }
+                    } else {
+                        logger.error('Could not open the document, Neither the Uri nor full name is null.');
                     }
-                    return openTextDocument(Uri.parse(message.uri), JSON.parse(message.range) as Range);
                 default:
                     return;
             }
@@ -63,32 +69,29 @@ class TestReportProvider implements Disposable {
         this.panel.reveal(position);
     }
 
-    public async update(tests: ITestItemBase[]): Promise<void> {
+    public async update(tests: ITestResult[]): Promise<void> {
         if (this.panel) {
             this.panel.webview.html = await testReportProvider.provideHtmlContent(tests);
         }
     }
 
-    public async provideHtmlContent(tests: ITestItemBase[]): Promise<string> {
+    public async provideHtmlContent(testResults: ITestResult[]): Promise<string> {
         const allResultsMap: Map<string, IReportMethod[]> = new Map();
         const passedResultMap: Map<string, IReportMethod[]> = new Map();
         const failedResultMap: Map<string, IReportMethod[]> = new Map();
-        let allCount: number = 0;
         let passedCount: number = 0;
         let failedCount: number = 0;
         let skippedCount: number = 0;
-        for (const test of tests) {
-            const result: ITestResultDetails | undefined = testResultManager.getResultDetails(Uri.parse(test.uri).fsPath, test.fullName);
-            allCount++;
+        for (const result of testResults) {
             if (result) {
-                this.putMethodResultIntoMap(allResultsMap, test, result);
-                switch (result.status) {
+                this.putMethodResultIntoMap(allResultsMap, result);
+                switch (result.details.status) {
                     case TestStatus.Pass:
-                        this.putMethodResultIntoMap(passedResultMap, test, result);
+                        this.putMethodResultIntoMap(passedResultMap, result);
                         passedCount++;
                         break;
                     case TestStatus.Fail:
-                        this.putMethodResultIntoMap(failedResultMap, test, result);
+                        this.putMethodResultIntoMap(failedResultMap, result);
                         failedCount++;
                         break;
                     case TestStatus.Skip:
@@ -102,7 +105,7 @@ class TestReportProvider implements Disposable {
             tests: allResultsMap,
             passedTests: passedResultMap,
             failedTests: failedResultMap,
-            allCount,
+            allCount: testResults.length,
             passedCount,
             failedCount,
             skippedCount,
@@ -119,22 +122,23 @@ class TestReportProvider implements Disposable {
         }
     }
 
-    private putMethodResultIntoMap(map: Map<string, IReportMethod[]>, test: ITestItemBase, result: ITestResultDetails): void {
-        const classFullName: string = test.fullName.substr(0, test.fullName.indexOf('#'));
+    private putMethodResultIntoMap(map: Map<string, IReportMethod[]>, result: ITestResult): void {
+        const classFullName: string = result.fullName.substr(0, result.fullName.indexOf('#'));
+        const displayName: string = result.displayName ? result.displayName : result.fullName.slice(result.fullName.indexOf('#') + 1);
         const methods: IReportMethod[] | undefined = map.get(classFullName);
         if (methods) {
             methods.push({
-                displayName: test.displayName,
-                uri: test.uri,
-                range: JSON.stringify(test.range),
-                result,
+                displayName,
+                uri: result.uri,
+                range: JSON.stringify(result.range),
+                result: result.details,
             });
         } else {
             map.set(classFullName, [{
-                displayName: test.displayName,
-                uri: test.uri,
-                range: JSON.stringify(test.range),
-                result,
+                displayName,
+                uri: result.uri,
+                range: JSON.stringify(result.range),
+                result: result.details,
             }]);
         }
     }
@@ -142,8 +146,8 @@ class TestReportProvider implements Disposable {
 
 interface IReportMethod {
     displayName: string;
-    uri: string;
-    range: string;
+    uri: string | undefined;
+    range: string | undefined;
     result: ITestResultDetails;
 }
 

@@ -32,6 +32,7 @@ import org.eclipse.jdt.core.IPackageFragment;
 import org.eclipse.jdt.core.IType;
 import org.eclipse.jdt.core.JavaCore;
 import org.eclipse.jdt.core.JavaModelException;
+import org.eclipse.jdt.core.search.IJavaSearchConstants;
 import org.eclipse.jdt.core.search.IJavaSearchScope;
 import org.eclipse.jdt.core.search.SearchEngine;
 import org.eclipse.jdt.core.search.SearchMatch;
@@ -99,6 +100,13 @@ public class TestSearchUtils {
                 // Assume the kinds of all methods are the same.
                 parent.setKind(testMethodList.get(0).getKind());
                 resultList.add(parent);
+                continue;
+            }
+            // Check if the class can still run tests even no method is annotated.
+            // For example, annotated with @RunWith
+            final TestItem runableClass = TestFrameworkUtils.resolveTestItemForClass(type);
+            if (runableClass != null) {
+                resultList.add(runableClass);
             }
         }
 
@@ -187,6 +195,9 @@ public class TestSearchUtils {
                         return;
                     }
                     final TestItem methodItem = TestFrameworkUtils.resoveTestItemForMethod(method);
+                    if (methodItem == null) {
+                        return;
+                    }
                     final IType type = (IType) method.getParent();
                     final TestItem classItem = classMap.get(type.getFullyQualifiedName());
                     if (classItem != null) {
@@ -197,6 +208,16 @@ public class TestSearchUtils {
                         newClassItem.addChild(methodItem);
                         classMap.put(type.getFullyQualifiedName(), newClassItem);
                     }
+                } else if (element instanceof IType) {
+                    final IType type = (IType) element;
+                    if (classMap.containsKey(type.getFullyQualifiedName())) {
+                        return;
+                    }
+                    final TestItem item = TestFrameworkUtils.resolveTestItemForClass(type);
+                    if (item == null) {
+                        return;
+                    }
+                    classMap.put(type.getFullyQualifiedName(), item);
                 }
             }
 
@@ -207,7 +228,7 @@ public class TestSearchUtils {
 
         for (final TestItem testClass : classMap.values()) {
             if (testClass.getChildren() == null || testClass.getChildren().size() <= 0) {
-                continue;
+                searchResult.add(testClass);
             } else if (testClass.getChildren().size() == 1) {
                 searchResult.add(testClass.getChildren().get(0));
             } else {
@@ -216,6 +237,33 @@ public class TestSearchUtils {
                 searchResult.add(testClass);
             }
         }
+        return searchResult;
+    }
+
+    public static List<TestItem> searchLocation(List<Object> arguments, IProgressMonitor monitor) throws CoreException {
+        final List<TestItem> searchResult = new LinkedList<>();
+        if (arguments == null || arguments.size() == 0) {
+            throw new RuntimeException("Invalid aruguments to search the location.");
+        }
+        // For now, input will only be a method.
+        final String methodFullName = ((String) arguments.get(0)).replace("#", ".");
+        final SearchPattern pattern = SearchPattern.createPattern(methodFullName, IJavaSearchConstants.METHOD,
+                IJavaSearchConstants.DECLARATIONS, SearchPattern.R_PATTERN_MATCH);
+        final IJavaProject[] projects = JavaCore.create(ResourcesPlugin.getWorkspace().getRoot())
+                .getJavaProjects();
+        final IJavaSearchScope scope = SearchEngine.createJavaSearchScope(projects, IJavaSearchScope.SOURCES);
+        final SearchRequestor requestor = new SearchRequestor() {
+            @Override
+            public void acceptSearchMatch(SearchMatch match) throws CoreException {
+                final Object element = match.getElement();
+                if (element instanceof IMethod) {
+                    final IMethod method = (IMethod) element;
+                    searchResult.add(TestFrameworkUtils.resoveTestItemForMethod(method));
+                }
+            }
+        };
+        new SearchEngine().search(pattern, new SearchParticipant[] { SearchEngine.getDefaultSearchParticipant() },
+                scope, requestor, monitor);
         return searchResult;
     }
 
@@ -234,7 +282,7 @@ public class TestSearchUtils {
         switch (params.getLevel()) {
             case ROOT:
                 final IJavaProject[] projects = JavaCore.create(ResourcesPlugin.getWorkspace().getRoot())
-                        .getJavaProjects();
+                .getJavaProjects();
                 return SearchEngine.createJavaSearchScope(projects, IJavaSearchScope.SOURCES);
             case FOLDER:
                 final Set<IJavaProject> projectSet = ProjectUtils.parseProjects(new URI(params.getUri()));
