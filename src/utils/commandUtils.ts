@@ -26,6 +26,11 @@ export async function searchTestCodeLens(uri: string): Promise<ITestItem[]> {
         JavaTestRunnerDelegateCommands.SEARCH_TEST_CODE_LENS, uri) || [];
 }
 
+export async function searchTestLocation(fullName: string): Promise<ITestItem[]> {
+    return await executeJavaLanguageServerCommand<ITestItem[]>(
+        JavaTestRunnerDelegateCommands.SEARCH_TEST_LOCATION, fullName) || [];
+}
+
 export async function resolveRuntimeClassPath(paths: string[]): Promise<string[]> {
     return _.uniq(await executeJavaLanguageServerCommand<string[]>(
         JavaTestRunnerDelegateCommands.RESOLVE_RUNTIME_CLASSPATH, paths) || []);

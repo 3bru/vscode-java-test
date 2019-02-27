@@ -11,7 +11,7 @@ export interface ITestItemBase {
 }
 
 export interface ITestItem extends ITestItemBase {
-    children: ITestItem[];
+    children: ITestItem[] | undefined;
     kind: TestKind;
     project: string;
     level: TestLevel;
