@@ -58,7 +58,7 @@ export abstract class BaseRunner implements ITestRunner {
         const commandParams: string[] = await this.constructCommandParams();
         const options: cp.SpawnOptions = { cwd: this.config ? this.config.workingDirectory : undefined, env: process.env };
         if (this.config && this.config.env) {
-            options.env = {...this.config.env, ...options.env};
+            options.env = {...options.env, ...this.config.env};
         }
         return new Promise<ITestResult[]>((resolve: (result: ITestResult[]) => void, reject: (error: Error) => void): void => {
             const testResultAnalyzer: BaseRunnerResultAnalyzer = this.getTestResultAnalyzer();
