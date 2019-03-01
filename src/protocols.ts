@@ -5,7 +5,7 @@ import { Range } from 'vscode';
 
 export interface ILocation {
     uri: string;
-    range: Range
+    range: Range;
 }
 
 export interface ITestItem extends ILocation {

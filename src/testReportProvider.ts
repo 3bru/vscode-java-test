@@ -3,11 +3,11 @@
 
 import * as path from 'path';
 import * as pug from 'pug';
-import { Disposable, ExtensionContext, Range, Uri, ViewColumn, WebviewPanel, window, QuickPickItem } from 'vscode';
+import { Disposable, ExtensionContext, QuickPickItem, Range, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
 import { openTextDocument } from './commands/explorerCommands';
 import { JavaTestRunnerCommands } from './constants/commands';
 import { logger } from './logger/logger';
-import { ITestItem, ILocation } from './protocols';
+import { ILocation, ITestItem } from './protocols';
 import { ITestResult } from './runners/models';
 import { ITestResultDetails, TestStatus } from './runners/models';
 import { searchTestLocation } from './utils/commandUtils';
@@ -159,7 +159,7 @@ interface IReportMethod {
 }
 
 interface ILocationQuickPick extends QuickPickItem {
-    location: ILocation,
+    location: ILocation;
 }
 
 export const testReportProvider: TestReportProvider = new TestReportProvider();
