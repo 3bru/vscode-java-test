@@ -3,11 +3,11 @@
 
 import * as path from 'path';
 import * as pug from 'pug';
-import { Disposable, ExtensionContext, Range, Uri, ViewColumn, WebviewPanel, window } from 'vscode';
+import { Disposable, ExtensionContext, Range, Uri, ViewColumn, WebviewPanel, window, QuickPickItem } from 'vscode';
 import { openTextDocument } from './commands/explorerCommands';
 import { JavaTestRunnerCommands } from './constants/commands';
 import { logger } from './logger/logger';
-import { ITestItem } from './protocols';
+import { ITestItem, ILocation } from './protocols';
 import { ITestResult } from './runners/models';
 import { ITestResultDetails, TestStatus } from './runners/models';
 import { searchTestLocation } from './utils/commandUtils';
@@ -54,9 +54,16 @@ class TestReportProvider implements Disposable {
                     if (message.uri) {
                         return openTextDocument(Uri.parse(message.uri), JSON.parse(message.range) as Range);
                     } else if (message.fullName) {
-                        const items: ITestItem[] = await searchTestLocation(message.fullName);
-                        if (items.length) {
+                        const items: ILocation[] = await searchTestLocation(message.fullName);
+                        if (items.length === 1) {
                             return openTextDocument(Uri.parse(items[0].uri), items[0].range);
+                        } else if (items.length > 1) {
+                            const pick: ILocationQuickPick | undefined = await window.showQuickPick(items.map((item: ITestItem) => {
+                                return { label: message.fullName, detail: Uri.parse(item.uri).fsPath, location: item };
+                            }), { placeHolder: 'Select the file you want to navigate to' });
+                            if (pick) {
+                                return openTextDocument(Uri.parse(pick.location.uri), pick.location.range);
+                            }
                         }
                     } else {
                         logger.error('Could not open the document, Neither the Uri nor full name is null.');
@@ -149,6 +156,10 @@ interface IReportMethod {
     uri: string | undefined;
     range: string | undefined;
     result: ITestResultDetails;
+}
+
+interface ILocationQuickPick extends QuickPickItem {
+    location: ILocation,
 }
 
 export const testReportProvider: TestReportProvider = new TestReportProvider();

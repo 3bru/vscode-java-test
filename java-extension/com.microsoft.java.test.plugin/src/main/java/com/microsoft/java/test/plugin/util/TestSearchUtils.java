@@ -12,6 +12,7 @@
 package com.microsoft.java.test.plugin.util;
 
 import com.google.gson.Gson;
+import com.microsoft.java.test.plugin.model.Location;
 import com.microsoft.java.test.plugin.model.SearchTestItemParams;
 import com.microsoft.java.test.plugin.model.TestItem;
 import com.microsoft.java.test.plugin.model.TestLevel;
@@ -240,13 +241,13 @@ public class TestSearchUtils {
         return searchResult;
     }
 
-    public static List<TestItem> searchLocation(List<Object> arguments, IProgressMonitor monitor) throws CoreException {
-        final List<TestItem> searchResult = new LinkedList<>();
+    public static List<Location> searchLocation(List<Object> arguments, IProgressMonitor monitor) throws CoreException {
+        final List<Location> searchResult = new LinkedList<>();
         if (arguments == null || arguments.size() == 0) {
             throw new RuntimeException("Invalid aruguments to search the location.");
         }
         // For now, input will only be a method.
-        final String methodFullName = ((String) arguments.get(0)).replace("#", ".");
+        final String methodFullName = ((String) arguments.get(0)).replaceAll("[$#]", ".");
         final SearchPattern pattern = SearchPattern.createPattern(methodFullName, IJavaSearchConstants.METHOD,
                 IJavaSearchConstants.DECLARATIONS, SearchPattern.R_PATTERN_MATCH);
         final IJavaProject[] projects = JavaCore.create(ResourcesPlugin.getWorkspace().getRoot())
@@ -258,7 +259,8 @@ public class TestSearchUtils {
                 final Object element = match.getElement();
                 if (element instanceof IMethod) {
                     final IMethod method = (IMethod) element;
-                    searchResult.add(TestFrameworkUtils.resoveTestItemForMethod(method));
+                    searchResult.add(new Location(JDTUtils.getFileURI(method.getResource()),
+                            TestItemUtils.parseTestItemRange(method)));
                 }
             }
         };

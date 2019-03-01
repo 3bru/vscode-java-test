@@ -16,14 +16,10 @@ import org.eclipse.lsp4j.Range;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TestItem {
+public class TestItem extends Location {
     private String displayName;
 
     private String fullName;
-
-    private String uri;
-
-    private Range range;
 
     private List<TestItem> children;
 
@@ -37,10 +33,9 @@ public class TestItem {
 
     public TestItem(String displayName, String fullName, String uri, String project, List<String> paramTypes,
             Range range, TestLevel level, TestKind kind) {
+        super(uri, range);
         this.displayName = displayName;
         this.fullName = fullName;
-        this.uri = uri;
-        this.range = range;
         this.level = level;
         this.kind = kind;
         this.project = project;
